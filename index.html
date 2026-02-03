@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Attendance System</title>
+  <style>
+    :root {
+      --sidebar-width: 260px;
+      --sidebar-collapsed: 72px;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --risk: #dc2626;
+      --risk-bg: #fef2f2;
+      --success: #16a34a;
+      --success-bg: #f0fdf4;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08);
+      --radius: 10px;
+      --transition: 0.2s ease;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    .sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: var(--sidebar-width);
+      height: 100vh;
+      background: var(--card);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      z-index: 100;
+      transition: width var(--transition), transform var(--transition);
+      overflow: hidden;
+    }
+    .sidebar.collapsed { width: var(--sidebar-collapsed); }
+    .sidebar-header {
+      padding: 1.25rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 64px;
+      flex-shrink: 0;
+    }
+    .sidebar-header h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--primary);
+      white-space: nowrap;
+      opacity: 1;
+      transition: opacity var(--transition);
+    }
+    .sidebar.collapsed .sidebar-header h1 { opacity: 0; pointer-events: none; width: 0; overflow: hidden; }
+    .sidebar-toggle {
+      background: none;
+      border: none;
+      padding: 8px;
+      cursor: pointer;
+      color: var(--text-muted);
+      border-radius: var(--radius);
+      flex-shrink: 0;
+    }
+    .sidebar-toggle:hover { background: var(--bg); color: var(--text); }
+    .sidebar-toggle svg { display: block; transition: transform var(--transition); }
+    .sidebar.collapsed .sidebar-toggle svg { transform: rotate(180deg); }
+    .nav { flex: 1; padding: 1rem 0; overflow-y: auto; }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0.75rem 1.25rem;
+      color: var(--text-muted);
+      text-decoration: none;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: all var(--transition);
+      white-space: nowrap;
+    }
+    .nav-item:hover { background: var(--bg); color: var(--text); }
+    .nav-item.active {
+      background: #eff6ff;
+      color: var(--primary);
+      border-left-color: var(--primary);
+      font-weight: 600;
+    }
+    .nav-item svg { flex-shrink: 0; }
+    .nav-item span { opacity: 1; transition: opacity var(--transition); }
+    .sidebar.collapsed .nav-item span { opacity: 0; width: 0; overflow: hidden; }
+    .main {
+      margin-left: var(--sidebar-width);
+      min-height: 100vh;
+      padding: 1.5rem;
+      transition: margin-left var(--transition);
+    }
+    .sidebar.collapsed + .main { margin-left: var(--sidebar-collapsed); }
+    .page { display: none; animation: fadeIn 0.2s ease; }
+    .page.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .page-header {
+      margin-bottom: 1.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 1rem;
+    }
+    .page-title { font-size: 1.5rem; font-weight: 700; color: var(--text); }
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .card-title { font-size: 0.9rem; font-weight: 600; color: var(--text); margin-bottom: 0.75rem; }
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .stat-box {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+    .stat-box .value { font-size: 1.75rem; font-weight: 700; color: var(--primary); }
+    .stat-box .label { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
+    .stat-box.risk .value { color: var(--risk); }
+    .stat-box.success .value { color: var(--success); }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 0.6rem 1.2rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border-radius: var(--radius);
+      border: none;
+      cursor: pointer;
+      transition: all var(--transition);
+      font-family: inherit;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-outline { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+    .btn-outline:hover { background: #eff6ff; }
+    .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+    .btn-present { background: var(--success-bg); color: var(--success); border: 1px solid var(--success); }
+    .btn-present:hover, .btn-present.active { background: var(--success); color: white; }
+    .btn-absent { background: #fef2f2; color: var(--risk); border: 1px solid var(--risk); }
+    .btn-absent:hover, .btn-absent.active { background: var(--risk); color: white; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .toggle-group {
+      display: inline-flex;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--bg);
+    }
+    .toggle-group .btn-toggle {
+      padding: 0.5rem 1rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-family: inherit;
+      transition: all var(--transition);
+    }
+    .toggle-group .btn-toggle:hover { color: var(--text); background: rgba(255,255,255,0.5); }
+    .toggle-group .btn-toggle.active { background: var(--card); color: var(--primary); box-shadow: var(--shadow); }
+    .select-subject {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.9rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--card);
+      color: var(--text);
+      font-family: inherit;
+      min-width: 180px;
+    }
+    .session-info { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.5rem; }
+    .session-info.active { color: var(--primary); font-weight: 500; }
+    .save-confirm { font-size: 0.85rem; color: var(--success); margin-left: 0.5rem; opacity: 0; transition: opacity 0.2s ease; }
+    .save-confirm.visible { opacity: 1; }
+    .insights-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; }
+    .insight-item {
+      padding: 0.75rem;
+      background: var(--bg);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+    .insight-item .insight-value { font-size: 1.25rem; font-weight: 700; color: var(--text); }
+    .insight-item .insight-label { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--card);
+    }
+    .table-wrap.marking-disabled { opacity: 0.7; pointer-events: none; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
+    th {
+      background: var(--bg);
+      font-weight: 600;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--bg); }
+    tr.clickable { cursor: pointer; }
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-risk { background: var(--risk-bg); color: var(--risk); }
+    .badge-ok { background: var(--success-bg); color: var(--success); }
+    .badge-improving { background: #fef3c7; color: #b45309; }
+    .action-cell { display: flex; gap: 6px; flex-wrap: wrap; }
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      padding: 1rem;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+    }
+    .modal-overlay.open { opacity: 1; visibility: visible; }
+    .modal {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+      max-width: 420px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      transform: scale(0.95);
+      transition: transform 0.2s ease;
+    }
+    .modal-overlay.open .modal { transform: scale(1); }
+    .modal-header {
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .modal-back { background: none; border: none; padding: 6px; cursor: pointer; color: var(--text-muted); border-radius: var(--radius); }
+    .modal-back:hover { background: var(--bg); color: var(--text); }
+    .modal-title { font-size: 1.15rem; font-weight: 700; }
+    .modal-body { padding: 1.5rem; }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.6rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.95rem;
+    }
+    .detail-row:last-of-type { border-bottom: none; }
+    .detail-label { color: var(--text-muted); }
+    .detail-value { font-weight: 500; text-align: right; }
+    .modal-actions { margin-top: 1.5rem; display: flex; flex-direction: column; gap: 0.75rem; }
+    .btn-call {
+      background: var(--success);
+      color: white;
+      text-decoration: none;
+      width: 100%;
+      text-align: center;
+      padding: 0.75rem;
+      border-radius: var(--radius);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background var(--transition);
+    }
+    .btn-call:hover { background: #15803d; color: white; }
+    .about-content { max-width: 560px; }
+    .about-content p { color: var(--text-muted); line-height: 1.6; margin-bottom: 1rem; }
+    .empty-state { text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.95rem; }
+    @media (max-width: 768px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.open { transform: translateX(0); }
+      .sidebar.collapsed { width: var(--sidebar-width); }
+      .main { margin-left: 0; padding: 1rem; }
+      .sidebar.collapsed + .main, .sidebar + .main { margin-left: 0; }
+      .mobile-menu-btn {
+        display: flex;
+        position: fixed;
+        top: 1rem;
+        left: 1rem;
+        z-index: 99;
+        background: var(--card);
+        border: 1px solid var(--border);
+        padding: 8px 12px;
+        border-radius: var(--radius);
+        cursor: pointer;
+        align-items: center;
+        justify-content: center;
+        box-shadow: var(--shadow);
+      }
+      .page-header { padding-top: 48px; }
+      th, td { padding: 0.5rem 0.6rem; font-size: 0.8rem; }
+      .action-cell .btn { padding: 0.35rem 0.6rem; font-size: 0.75rem; }
+    }
+    .mobile-menu-btn { display: none; }
+    @media (max-width: 768px) { .mobile-menu-btn { display: flex; } }
+    /* Role selector */
+    .role-selector-wrap {
+      padding: 0.75rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .role-selector-wrap label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 6px; }
+    .role-select { width: 100%; padding: 0.5rem 0.75rem; font-size: 0.85rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); color: var(--text); font-family: inherit; }
+    .student-roll-select { margin-top: 6px; }
+    .nav-item.role-hidden { display: none; }
+    /* Alerts */
+    .alerts-section { margin-bottom: 1.5rem; }
+    .alerts-section .card-title { margin-bottom: 0.5rem; }
+    .alert-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 0.75rem 1rem; border-radius: var(--radius); margin-bottom: 0.5rem;
+      border-left: 4px solid var(--primary); background: #eff6ff;
+      font-size: 0.9rem;
+    }
+    .alert-item.alert-risk { border-left-color: var(--risk); background: var(--risk-bg); }
+    .alert-item.alert-success { border-left-color: var(--success); background: var(--success-bg); }
+    .alert-item.alert-warning { border-left-color: #b45309; background: #fef3c7; }
+    .alert-item .alert-icon { flex-shrink: 0; }
+    /* Progress bars & class health */
+    .progress-wrap { margin-top: 0.5rem; }
+    .progress-bar-outer {
+      height: 10px; border-radius: 999px; background: var(--border); overflow: hidden;
+    }
+    .progress-bar-inner {
+      height: 100%; border-radius: 999px; transition: width 0.3s ease;
+    }
+    .progress-bar-inner.health-good { background: var(--success); }
+    .progress-bar-inner.health-mid { background: #eab308; }
+    .progress-bar-inner.health-low { background: var(--risk); }
+    .class-health-badge {
+      display: inline-flex; align-items: center; gap: 6px; padding: 0.4rem 0.75rem; border-radius: var(--radius);
+      font-size: 0.85rem; font-weight: 600;
+    }
+    .class-health-badge.health-good { background: var(--success-bg); color: var(--success); }
+    .class-health-badge.health-mid { background: #fef3c7; color: #b45309; }
+    .class-health-badge.health-low { background: var(--risk-bg); color: var(--risk); }
+    .insight-progress { margin-top: 0.5rem; }
+    .insight-progress .progress-bar-outer { height: 8px; }
+    /* Notices & Calendar */
+    .notices-page-grid { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+    @media (min-width: 900px) { .notices-page-grid { grid-template-columns: 1fr 320px; } }
+    .notice-form { margin-bottom: 1rem; }
+    .notice-form textarea { width: 100%; min-height: 80px; padding: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius); font-family: inherit; font-size: 0.9rem; resize: vertical; }
+    .notice-form input[type="date"] { margin-top: 0.5rem; padding: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius); font-family: inherit; }
+    .notice-list { list-style: none; }
+    .notice-list li {
+      padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;
+    }
+    .notice-list li:last-child { border-bottom: none; }
+    .notice-date-tag { font-size: 0.75rem; color: var(--text-muted); }
+    .notice-delete { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; border-radius: 4px; }
+    .notice-delete:hover { color: var(--risk); background: var(--risk-bg); }
+    .calendar-wrap { background: var(--bg); border-radius: var(--radius); padding: 1rem; border: 1px solid var(--border); }
+    .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .calendar-header button { background: none; border: none; padding: 6px 10px; cursor: pointer; color: var(--primary); font-weight: 600; border-radius: var(--radius); }
+    .calendar-header button:hover { background: #eff6ff; }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; font-size: 0.8rem; }
+    .calendar-day-name { padding: 6px; color: var(--text-muted); font-weight: 600; }
+    .calendar-day {
+      padding: 8px; border-radius: var(--radius); cursor: pointer; min-height: 36px;
+    }
+    .calendar-day:hover { background: var(--border); }
+    .calendar-day.other-month { color: var(--text-muted); opacity: 0.7; }
+    .calendar-day.today { background: var(--primary); color: white; font-weight: 600; }
+    .calendar-day.has-notice { position: relative; }
+    .calendar-day.has-notice::after { content: ''; position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: var(--primary); }
+    .calendar-day.today.has-notice::after { background: white; }
+    .day-notices { margin-top: 1rem; padding: 1rem; background: var(--card); border-radius: var(--radius); border: 1px solid var(--border); }
+    .day-notices h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+    .pct-cell { min-width: 100px; }
+    .pct-cell .progress-bar-outer { height: 8px; margin-top: 4px; max-width: 80px; }
+  </style>
+</head>
+<body>
+  <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Menu">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h1>Attensense</h1>
+      <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+    </div>
+    <div class="role-selector-wrap">
+      <label for="roleSelect">Role</label>
+      <select id="roleSelect" class="role-select">
+        <option value="Teacher">Teacher</option>
+        <option value="Student">Student</option>
+        <option value="HOD">HOD</option>
+      </select>
+      <select id="studentRollSelect" class="role-select student-roll-select" style="display: none;" title="View as student (roll number)"></select>
+    </div>
+    <nav class="nav">
+      <a class="nav-item active" data-page="dashboard" data-roles="Teacher,HOD,Student">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+        <span>Dashboard</span>
+      </a>
+      <a class="nav-item" data-page="students" data-roles="Teacher">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Students</span>
+      </a>
+      <a class="nav-item" data-page="atrisk" data-roles="Teacher,HOD">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span>At Risk</span>
+      </a>
+      <a class="nav-item" data-page="notices" data-roles="Teacher,Student,HOD">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span>Notices</span>
+      </a>
+      <a class="nav-item" data-page="about" data-roles="Teacher">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <span>About</span>
+      </a>
+    </nav>
+  </aside>
+  <main class="main">
+    <section class="page active" id="page-dashboard">
+      <div class="page-header">
+        <h2 class="page-title" id="dashboardTitle">Dashboard</h2>
+        <div class="toggle-group" id="viewModeToggle">
+          <button type="button" class="btn-toggle active" data-mode="overall">Overall</button>
+          <button type="button" class="btn-toggle" data-mode="month">This Month</button>
+        </div>
+      </div>
+      <div id="dashboardStudentView" class="role-only-Student" style="display: none;">
+        <div class="card">
+          <div class="card-title">My Attendance</div>
+          <div class="insights-grid" id="myAttendanceInsights"></div>
+          <div class="progress-wrap">
+            <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px;">Your attendance this period</div>
+            <div class="progress-bar-outer"><div class="progress-bar-inner" id="myAttendanceProgressBar" style="width: 0%;"></div></div>
+            <div style="font-size: 0.9rem; margin-top: 4px;" id="myAttendancePctText">—</div>
+          </div>
+        </div>
+      </div>
+      <div id="dashboardTeacherHODView">
+        <div class="card alerts-section" id="alertsCard" data-role-only="Teacher,HOD">
+          <div class="card-title">Alerts</div>
+          <div id="alertsContainer"></div>
+        </div>
+        <div class="card" id="sessionControlCard" data-role-only="Teacher">
+          <div class="card-title">Class session</div>
+          <div class="session-info" id="sessionInfoLine">No active session. Select subject and click Start Class.</div>
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
+            <label for="subjectSelect" style="font-size: 0.85rem; color: var(--text-muted);">Subject</label>
+            <select id="subjectSelect" class="select-subject">
+              <option value="Mathematics">Mathematics</option>
+              <option value="Physics">Physics</option>
+              <option value="BXE">BXE</option>
+              <option value="Programming">Programming</option>
+              <option value="Engineering Graphics">Engineering Graphics</option>
+            </select>
+            <button type="button" class="btn btn-primary" id="startClassBtn">Start Class</button>
+            <button type="button" class="btn btn-outline" id="saveSessionBtn" disabled>Save Session</button>
+            <span class="save-confirm" id="saveConfirmMsg">Session saved.</span>
+          </div>
+        </div>
+        <div class="stats-row" data-role-only="Teacher,HOD">
+          <div class="stat-box"><div class="value" id="statTotalClasses">0</div><div class="label">Total classes</div></div>
+          <div class="stat-box"><div class="value" id="statTotalStudents">69</div><div class="label">Students</div></div>
+          <div class="stat-box risk"><div class="value" id="statAtRisk">0</div><div class="label">At risk (&lt;75%)</div></div>
+          <div class="stat-box" data-role-only="Teacher,HOD">
+            <div class="value" id="statClassHealthPct">—</div>
+            <div class="label">Class health</div>
+            <div class="progress-wrap insight-progress"><div class="progress-bar-outer"><div class="progress-bar-inner" id="classHealthBar" style="width: 0%;"></div></div></div>
+          </div>
+        </div>
+        <div class="card" id="attendanceInsightsCard" data-role-only="Teacher,HOD">
+          <div class="card-title">Attendance Insights</div>
+          <div class="insights-grid" id="attendanceInsights">
+            <div class="insight-item"><span class="insight-value" id="insightTotalClasses">0</span><div class="insight-label">Total classes conducted</div><div class="progress-wrap insight-progress"><div class="progress-bar-outer"><div class="progress-bar-inner" id="insightTotalBar" style="width: 0%;"></div></div></div>
+            <div class="insight-item"><span class="insight-value" id="insightAvgPct">—</span><div class="insight-label">Class average attendance %</div><div class="progress-wrap insight-progress"><div class="progress-bar-outer"><div class="progress-bar-inner" id="insightAvgBar" style="width: 0%;"></div></div></div>
+            <div class="insight-item"><span class="insight-value" id="insightAtRisk">0</span><div class="insight-label">Students at risk (&lt;75%)</div><div class="progress-wrap insight-progress"><div class="progress-bar-outer"><div class="progress-bar-inner" id="insightAtRiskBar" style="width: 0%;"></div></div></div>
+            <div class="insight-item"><span class="insight-value" id="insightHighest">—</span><div class="insight-label">Highest attendance %</div></div>
+            <div class="insight-item"><span class="insight-value" id="insightLowest">—</span><div class="insight-label">Lowest attendance %</div></div>
+          </div>
+        </div>
+        <div class="card" id="markAttendanceCard" data-role-only="Teacher">
+          <div class="card-title">Mark attendance for current session</div>
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;" id="markingHint">Click Start Class to begin marking attendance. Click Save Session when done.</p>
+          <div class="table-wrap" id="dashboardTableWrap">
+            <table>
+              <thead>
+                <tr><th>Roll</th><th>Name</th><th>Present</th><th>Actions</th></tr>
+              </thead>
+              <tbody id="dashboardTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="page" id="page-students">
+      <div class="page-header">
+        <h2 class="page-title">Students</h2>
+        <div class="toggle-group" id="viewModeToggleStudents">
+          <button type="button" class="btn-toggle active" data-mode="overall">Overall</button>
+          <button type="button" class="btn-toggle" data-mode="month">This Month</button>
+        </div>
+        <button class="btn btn-outline" id="exportCsvBtn">Export CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Roll</th><th>Name</th><th>Phone</th><th>Present</th><th>Attendance %</th><th>Status</th></tr>
+          </thead>
+          <tbody id="studentsTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="page" id="page-atrisk">
+      <div class="page-header">
+        <h2 class="page-title">At Risk</h2>
+        <div class="toggle-group" id="viewModeToggleAtRisk">
+          <button type="button" class="btn-toggle active" data-mode="overall">Overall</button>
+          <button type="button" class="btn-toggle" data-mode="month">This Month</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Roll</th><th>Name</th><th>Phone</th><th>Present</th><th>Attendance %</th><th>Status</th></tr>
+          </thead>
+          <tbody id="atRiskTableBody"></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="atRiskEmpty" style="display: none;">No students at risk. All have ≥75% attendance.</div>
+    </section>
+    <section class="page" id="page-notices">
+      <div class="page-header"><h2 class="page-title">Notices &amp; Calendar</h2></div>
+      <div class="notices-page-grid">
+        <div>
+          <div class="card" id="noticeBoardCard">
+            <div class="card-title">Notice Board</div>
+            <div id="noticeFormWrap" class="notice-form" data-role-only="Teacher">
+              <textarea id="noticeText" placeholder="Enter notice text..." rows="3"></textarea>
+              <div style="margin-top: 0.5rem;"><label for="noticeDate" style="font-size: 0.85rem; color: var(--text-muted);">Optional date (for calendar)</label><br><input type="date" id="noticeDate" style="margin-top: 4px;"></div>
+              <button type="button" class="btn btn-primary" id="addNoticeBtn" style="margin-top: 0.75rem;">Add Notice</button>
+            </div>
+            <ul class="notice-list" id="noticeList"></ul>
+          </div>
+        </div>
+        <div>
+          <div class="card calendar-wrap">
+            <div class="card-title">Academic Calendar</div>
+            <div class="calendar-header">
+              <button type="button" id="calendarPrev" aria-label="Previous month">&#9664;</button>
+              <span id="calendarMonthYear"></span>
+              <button type="button" id="calendarNext" aria-label="Next month">&#9654;</button>
+            </div>
+            <div class="calendar-grid" id="calendarGrid"></div>
+            <div class="day-notices" id="dayNotices" style="display: none;">
+              <h4 id="dayNoticesTitle">Notices for selected date</h4>
+              <ul id="dayNoticesList"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="page" id="page-about">
+      <div class="page-header"><h2 class="page-title">About</h2></div>
+      <div class="card about-content">
+        <p><strong>Smart Attendance System</strong> — Subject-wise attendance with Start Class and Save Session. Data persists in localStorage.</p>
+        <p>Select a subject, click Start Class to mark attendance, then Save Session to commit. Insights use combined data across subjects.</p>
+      </div>
+    </section>
+  </main>
+  <div class="modal-overlay" id="studentModal">
+    <div class="modal">
+      <div class="modal-header">
+        <button class="modal-back" id="modalBack" aria-label="Back">←</button>
+        <h3 class="modal-title" id="modalTitle">Student details</h3>
+      </div>
+      <div class="modal-body">
+        <div class="detail-row"><span class="detail-label">Name</span><span class="detail-value" id="modalName">—</span></div>
+        <div class="detail-row"><span class="detail-label">Roll number</span><span class="detail-value" id="modalRoll">—</span></div>
+        <div class="detail-row"><span class="detail-label">Phone</span><span class="detail-value" id="modalPhone">—</span></div>
+        <div class="detail-row"><span class="detail-label">Total classes</span><span class="detail-value" id="modalTotalClasses">—</span></div>
+        <div class="detail-row"><span class="detail-label">Present count</span><span class="detail-value" id="modalPresent">—</span></div>
+        <div class="detail-row"><span class="detail-label">Attendance %</span><span class="detail-value" id="modalPct">—</span></div>
+        <div class="detail-row"><span class="detail-label">Risk status</span><span class="detail-value" id="modalRisk">—</span></div>
+        <div class="detail-row"><span class="detail-label">Prediction</span><span class="detail-value" id="modalPrediction">—</span></div>
+        <div class="modal-actions">
+          <a class="btn-call" id="modalCallBtn" href="#">Call student</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const STORAGE_KEY = 'smartAttendance';
+    const NOTICES_STORAGE_KEY = 'smartAttendanceNotices';
+    const TOTAL_STUDENTS = 69;
+    const SUBJECTS = ['Mathematics', 'Physics', 'Chemistry', 'Programming', 'Engineering Graphics'];
+
+    function getNotices() {
+      try {
+        var raw = localStorage.getItem(NOTICES_STORAGE_KEY);
+        if (!raw) return [];
+        var parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_) { return []; }
+    }
+    function saveNotices(notices) {
+      localStorage.setItem(NOTICES_STORAGE_KEY, JSON.stringify(notices));
+    }
+    function getNoticesForDate(dateStr) {
+      var notices = getNotices();
+      return notices.filter(function (n) { return n.date === dateStr; });
+    }
+
+    function generateDummyPhone(roll) {
+      var prefixes = ['98', '87', '76', '91', '89'];
+      var p = prefixes[(roll - 1) % prefixes.length];
+      var rest = String(10000000 + (roll * 12345) % 10000000).slice(-8);
+      return p + rest;
+    }
+
+    function getDefaultData() {
+      var students = [];
+      for (var i = 1; i <= TOTAL_STUDENTS; i++) {
+        students.push({
+          rollNumber: i,
+          name: 'Student ' + i,
+          phone: generateDummyPhone(i),
+          presentCount: 0
+        });
+      }
+      var subjects = {};
+      SUBJECTS.forEach(function (name) { subjects[name] = { sessions: [] }; });
+      return {
+        totalClasses: 0,
+        currentSessionPresent: [],
+        currentSessionDate: null,
+        sessions: [],
+        subjects: subjects,
+        students: students
+      };
+    }
+
+    function loadData() {
+      try {
+        var raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return getDefaultData();
+        var parsed = JSON.parse(raw);
+        if (!parsed.students || !Array.isArray(parsed.students)) return getDefaultData();
+        if (!Array.isArray(parsed.currentSessionPresent)) parsed.currentSessionPresent = [];
+        if (typeof parsed.totalClasses !== 'number') parsed.totalClasses = 0;
+        if (!Array.isArray(parsed.sessions)) parsed.sessions = [];
+        if (parsed.currentSessionDate === undefined) parsed.currentSessionDate = null;
+        if (!parsed.subjects || typeof parsed.subjects !== 'object') parsed.subjects = {};
+        SUBJECTS.forEach(function (name) {
+          if (!parsed.subjects[name] || !Array.isArray(parsed.subjects[name].sessions)) {
+            parsed.subjects[name] = { sessions: [] };
+          }
+        });
+        return parsed;
+      } catch (_) {
+        return getDefaultData();
+      }
+    }
+
+    function saveData(data) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    var state = loadData();
+    var viewMode = 'overall';
+    var sessionStarted = false;
+    var currentSessionSubject = null;
+    var currentRole = localStorage.getItem('smartAttendanceRole') || 'Teacher';
+    var studentRollForView = parseInt(localStorage.getItem('smartAttendanceStudentRoll') || '1', 10);
+    var calendarMonth = new Date().getMonth();
+    var calendarYear = new Date().getFullYear();
+
+    function getStudent(rollNumber) {
+      return state.students.find(function (s) { return s.rollNumber === rollNumber; });
+    }
+
+    function getSessionsInCurrentMonth() {
+      var now = new Date();
+      var y = now.getFullYear();
+      var m = now.getMonth();
+      return state.sessions.filter(function (s) {
+        var d = new Date(s.date);
+        return d.getFullYear() === y && d.getMonth() === m;
+      });
+    }
+
+    function getMonthPresentCount(rollNumber) {
+      var monthSessions = getSessionsInCurrentMonth();
+      return monthSessions.filter(function (s) { return s.present && s.present.indexOf(rollNumber) !== -1; }).length;
+    }
+
+    function getViewTotalClasses() {
+      if (viewMode === 'month') return getSessionsInCurrentMonth().length;
+      return state.totalClasses;
+    }
+
+    function getViewPresentCount(student) {
+      if (viewMode === 'month') return getMonthPresentCount(student.rollNumber);
+      return student.presentCount;
+    }
+
+    function attendancePercent(student) {
+      if (state.totalClasses === 0) return 0;
+      return Math.round((student.presentCount / state.totalClasses) * 100);
+    }
+
+    function attendancePercentForView(student) {
+      var total = getViewTotalClasses();
+      if (total === 0) return 0;
+      var present = getViewPresentCount(student);
+      return Math.round((present / total) * 100);
+    }
+
+    function isAtRisk(student) {
+      return state.totalClasses > 0 && attendancePercent(student) < 75;
+    }
+
+    function isAtRiskForView(student) {
+      var total = getViewTotalClasses();
+      if (total === 0) return false;
+      return attendancePercentForView(student) < 75;
+    }
+
+    function getPredictionBadge(student) {
+      var pct = attendancePercent(student);
+      if (pct >= 75) return { text: 'Safe', cls: 'badge-ok' };
+      var last5 = state.sessions.slice(-5);
+      if (last5.length >= 5) {
+        var presentInSession = function (s, roll) { return s.present && s.present.indexOf(roll) !== -1; };
+        var first2 = last5.slice(0, 2).filter(function (s) { return presentInSession(s, student.rollNumber); }).length;
+        var last2 = last5.slice(-2).filter(function (s) { return presentInSession(s, student.rollNumber); }).length;
+        if (last2 > first2) return { text: 'Improving', cls: 'badge-improving' };
+      }
+      return { text: 'At Risk', cls: 'badge-risk' };
+    }
+
+    function isPresentInCurrentSession(rollNumber) {
+      return state.currentSessionPresent.indexOf(rollNumber) !== -1;
+    }
+
+    function markPresent(rollNumber) {
+      if (!sessionStarted) return;
+      var student = getStudent(rollNumber);
+      if (!student) return;
+      if (isPresentInCurrentSession(rollNumber)) return;
+      state.currentSessionPresent.push(rollNumber);
+      renderAll();
+    }
+
+    function markAbsent(rollNumber) {
+      if (!sessionStarted) return;
+      var student = getStudent(rollNumber);
+      if (!student) return;
+      var idx = state.currentSessionPresent.indexOf(rollNumber);
+      if (idx === -1) return;
+      state.currentSessionPresent.splice(idx, 1);
+      renderAll();
+    }
+
+    function startClass() {
+      var subject = document.getElementById('subjectSelect').value;
+      if (!subject) return;
+      sessionStarted = true;
+      currentSessionSubject = subject;
+      state.currentSessionDate = new Date().toISOString().slice(0, 10);
+      state.currentSessionPresent = [];
+      renderAll();
+    }
+
+    function saveSession() {
+      if (!sessionStarted || !currentSessionSubject) return;
+      var date = state.currentSessionDate;
+      var present = state.currentSessionPresent.slice();
+      state.sessions.push({ date: date, present: present, subject: currentSessionSubject });
+      if (!state.subjects[currentSessionSubject]) state.subjects[currentSessionSubject] = { sessions: [] };
+      state.subjects[currentSessionSubject].sessions.push({ date: date, present: present });
+      state.totalClasses++;
+      present.forEach(function (roll) {
+        var s = getStudent(roll);
+        if (s) s.presentCount++;
+      });
+      saveData(state);
+      sessionStarted = false;
+      currentSessionSubject = null;
+      state.currentSessionPresent = [];
+      document.getElementById('saveConfirmMsg').classList.add('visible');
+      setTimeout(function () {
+        document.getElementById('saveConfirmMsg').classList.remove('visible');
+      }, 2500);
+      renderAll();
+    }
+
+    function openStudentModal(rollNumber) {
+      var student = getStudent(rollNumber);
+      if (!student) return;
+      var totalView = getViewTotalClasses();
+      var presentView = getViewPresentCount(student);
+      var pctView = totalView ? Math.round((presentView / totalView) * 100) : 0;
+      var riskView = totalView > 0 && pctView < 75;
+      var pred = getPredictionBadge(student);
+      document.getElementById('modalTitle').textContent = student.name;
+      document.getElementById('modalName').textContent = student.name;
+      document.getElementById('modalRoll').textContent = student.rollNumber;
+      document.getElementById('modalPhone').textContent = student.phone;
+      document.getElementById('modalTotalClasses').textContent = totalView + (viewMode === 'month' ? ' (this month)' : '');
+      document.getElementById('modalPresent').textContent = presentView + (viewMode === 'month' ? ' (this month)' : '');
+      document.getElementById('modalPct').textContent = totalView ? pctView + '%' : '—';
+      document.getElementById('modalRisk').innerHTML = riskView ? '<span class="badge badge-risk">At Risk</span>' : '<span class="badge badge-ok">OK</span>';
+      document.getElementById('modalPrediction').innerHTML = '<span class="badge ' + pred.cls + '">' + pred.text + '</span>';
+      document.getElementById('modalCallBtn').href = 'tel:' + student.phone.replace(/\s/g, '');
+      document.getElementById('studentModal').classList.add('open');
+    }
+
+    function closeStudentModal() {
+      document.getElementById('studentModal').classList.remove('open');
+    }
+
+    function getAlerts() {
+      var alerts = [];
+      var total = getViewTotalClasses();
+      var atRiskCount = state.students.filter(function (s) { return isAtRiskForView(s); }).length;
+      if (total === 0) {
+        alerts.push({ type: 'info', msg: 'No attendance data yet. Start a class session to begin.', icon: 'ℹ' });
+        return alerts;
+      }
+      if (atRiskCount > 0) {
+        alerts.push({ type: 'risk', msg: atRiskCount + ' student(s) are at risk this ' + (viewMode === 'month' ? 'month' : 'period') + '.', icon: '⚠' });
+        if (atRiskCount >= 10) alerts.push({ type: 'warning', msg: 'Immediate action required: high number of students at risk.', icon: '!' });
+      }
+      var monthSessions = getSessionsInCurrentMonth();
+      var prevMonth = new Date();
+      prevMonth.setMonth(prevMonth.getMonth() - 1);
+      var prevMonthSessions = state.sessions.filter(function (s) {
+        var d = new Date(s.date);
+        return d.getFullYear() === prevMonth.getFullYear() && d.getMonth() === prevMonth.getMonth();
+      });
+      if (viewMode === 'month' && monthSessions.length >= 2 && prevMonthSessions.length >= 1) {
+        var prevAtRisk = state.students.filter(function (s) {
+          var presentPrev = prevMonthSessions.filter(function (sess) { return sess.present && sess.present.indexOf(s.rollNumber) !== -1; }).length;
+          var pctPrev = prevMonthSessions.length ? Math.round((presentPrev / prevMonthSessions.length) * 100) : 0;
+          return pctPrev < 75;
+        }).length;
+        if (atRiskCount < prevAtRisk) alerts.push({ type: 'success', msg: 'Overall attendance improved compared to last month.', icon: '✓' });
+      }
+      if (total >= 5 && atRiskCount === 0) alerts.push({ type: 'success', msg: 'All students are above 75% attendance. Good job!', icon: '✓' });
+      return alerts;
+    }
+
+    function renderAlerts() {
+      var container = document.getElementById('alertsContainer');
+      if (!container) return;
+      var alerts = getAlerts();
+      if (alerts.length === 0) {
+        container.innerHTML = '<div class="alert-item alert-success"><span class="alert-icon">✓</span><span>No alerts. Attendance is on track.</span></div>';
+        return;
+      }
+      container.innerHTML = alerts.map(function (a) {
+        var cls = 'alert-item';
+        if (a.type === 'risk' || a.type === 'warning') cls += ' alert-risk';
+        else if (a.type === 'success') cls += ' alert-success';
+        else if (a.type === 'info') cls += ' alert-warning';
+        return '<div class="' + cls + '"><span class="alert-icon">' + a.icon + '</span><span>' + a.msg + '</span></div>';
+      }).join('');
+    }
+
+    function getCurrentRole() {
+      var sel = document.getElementById('roleSelect');
+      return sel ? sel.value : 'Teacher';
+    }
+
+    function getStudentRollForView() {
+      var sel = document.getElementById('studentRollSelect');
+      if (!sel || sel.style.display === 'none') return studentRollForView;
+      var val = parseInt(sel.value, 10);
+      return isNaN(val) ? 1 : val;
+    }
+
+    function applyRoleVisibility() {
+      currentRole = getCurrentRole();
+      studentRollForView = getStudentRollForView();
+      localStorage.setItem('smartAttendanceRole', currentRole);
+      localStorage.setItem('smartAttendanceStudentRoll', String(studentRollForView));
+      document.querySelectorAll('.nav-item').forEach(function (el) {
+        var roles = el.getAttribute('data-roles');
+        var show = roles && roles.split(',').indexOf(currentRole) !== -1;
+        el.classList.toggle('role-hidden', !show);
+      });
+      document.querySelectorAll('[data-role-only]').forEach(function (el) {
+        var roles = el.getAttribute('data-role-only');
+        var show = roles && roles.split(',').indexOf(currentRole) !== -1;
+        el.style.display = show ? '' : 'none';
+      });
+      var studentRollSelect = document.getElementById('studentRollSelect');
+      if (studentRollSelect) studentRollSelect.style.display = currentRole === 'Student' ? 'block' : 'none';
+      var dashboardStudentView = document.getElementById('dashboardStudentView');
+      var dashboardTeacherHODView = document.getElementById('dashboardTeacherHODView');
+      if (dashboardStudentView) dashboardStudentView.style.display = currentRole === 'Student' ? 'block' : 'none';
+      if (dashboardTeacherHODView) dashboardTeacherHODView.style.display = currentRole === 'Student' ? 'none' : 'block';
+      var dashboardTitle = document.getElementById('dashboardTitle');
+      if (dashboardTitle) {
+        if (currentRole === 'Student') dashboardTitle.textContent = 'My Attendance';
+        else if (currentRole === 'HOD') dashboardTitle.textContent = 'Analytics';
+        else dashboardTitle.textContent = 'Dashboard';
+      }
+      var viewModeToggle = document.getElementById('viewModeToggle');
+      if (viewModeToggle) viewModeToggle.style.display = '';
+    }
+
+    function renderMyAttendance() {
+      var roll = getStudentRollForView();
+      var student = getStudent(roll);
+      var container = document.getElementById('myAttendanceInsights');
+      var progressBar = document.getElementById('myAttendanceProgressBar');
+      var pctText = document.getElementById('myAttendancePctText');
+      if (!student || !container) return;
+      var total = getViewTotalClasses();
+      var present = getViewPresentCount(student);
+      var pct = total ? Math.round((present / total) * 100) : 0;
+      container.innerHTML = '<div class="insight-item"><span class="insight-value">' + present + '</span><div class="insight-label">Present (' + (viewMode === 'month' ? 'this month' : 'overall') + ')</div></div>' +
+        '<div class="insight-item"><span class="insight-value">' + total + '</span><div class="insight-label">Total classes</div></div>' +
+        '<div class="insight-item"><span class="insight-value">' + (total ? pct + '%' : '—') + '</span><div class="insight-label">Attendance %</div></div>';
+      if (progressBar) {
+        progressBar.style.width = Math.min(100, pct) + '%';
+        progressBar.className = 'progress-bar-inner ' + (pct >= 75 ? 'health-good' : pct >= 50 ? 'health-mid' : 'health-low');
+      }
+      if (pctText) pctText.textContent = total ? pct + '%' : '—';
+    }
+
+    function renderNoticesAndCalendar() {
+      var notices = getNotices();
+      var listEl = document.getElementById('noticeList');
+      if (listEl) {
+        listEl.innerHTML = notices.length === 0 ? '<li style="border: none; color: var(--text-muted);">No notices yet.</li>' : notices.slice().reverse().map(function (n) {
+          return '<li><div><span class="notice-date-tag">' + (n.date || 'No date') + '</span><br>' + (n.text || '').replace(/</g, '&lt;') + '</div>' +
+            (currentRole === 'Teacher' ? '<button type="button" class="notice-delete" data-notice-id="' + n.id + '" aria-label="Delete">&#10005;</button>' : '') + '</li>';
+        }).join('');
+      }
+      renderCalendar();
+    }
+
+    function renderCalendar() {
+      var monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      var dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      document.getElementById('calendarMonthYear').textContent = monthNames[calendarMonth] + ' ' + calendarYear;
+      var first = new Date(calendarYear, calendarMonth, 1);
+      var last = new Date(calendarYear, calendarMonth + 1, 0);
+      var startDay = first.getDay();
+      var daysInMonth = last.getDate();
+      var prevMonthLast = new Date(calendarYear, calendarMonth, 0).getDate();
+      var notices = getNotices();
+      var today = new Date();
+      var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+      var html = dayNames.map(function (d) { return '<div class="calendar-day-name">' + d + '</div>'; }).join('');
+      var pad = startDay;
+      var i = 0;
+      while (pad--) {
+        var prevDate = prevMonthLast - startDay + 1 + i;
+        i++;
+        var prevMonthNum = calendarMonth === 0 ? 12 : calendarMonth;
+        var prevYearNum = calendarMonth === 0 ? calendarYear - 1 : calendarYear;
+        var prevDateStr = prevYearNum + '-' + String(prevMonthNum).padStart(2, '0') + '-' + String(prevDate).padStart(2, '0');
+        var hasNotice = notices.some(function (n) { return n.date === prevDateStr; });
+        html += '<div class="calendar-day other-month' + (hasNotice ? ' has-notice' : '') + '" data-date="' + prevDateStr + '">' + prevDate + '</div>';
+      }
+      for (var d = 1; d <= daysInMonth; d++) {
+        var dateStr = calendarYear + '-' + String(calendarMonth + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+        var hasNotice = notices.some(function (n) { return n.date === dateStr; });
+        var isToday = dateStr === todayStr;
+        var cls = 'calendar-day' + (isToday ? ' today' : '') + (hasNotice ? ' has-notice' : '');
+        html += '<div class="' + cls + '" data-date="' + dateStr + '">' + d + '</div>';
+      }
+      var remaining = 42 - (startDay + daysInMonth);
+      var nextMonthNum = calendarMonth === 11 ? 1 : calendarMonth + 2;
+      var nextYearNum = calendarMonth === 11 ? calendarYear + 1 : calendarYear;
+      for (var j = 1; j <= remaining; j++) {
+        var nextDateStr = nextYearNum + '-' + String(nextMonthNum).padStart(2, '0') + '-' + String(j).padStart(2, '0');
+        var hasNotice = notices.some(function (n) { return n.date === nextDateStr; });
+        html += '<div class="calendar-day other-month' + (hasNotice ? ' has-notice' : '') + '" data-date="' + nextDateStr + '">' + j + '</div>';
+      }
+      document.getElementById('calendarGrid').innerHTML = html;
+    }
+
+    function showDayNotices(dateStr) {
+      var dayNotices = document.getElementById('dayNotices');
+      var title = document.getElementById('dayNoticesTitle');
+      var list = document.getElementById('dayNoticesList');
+      var notices = getNoticesForDate(dateStr);
+      if (title) title.textContent = 'Notices for ' + dateStr;
+      if (list) list.innerHTML = notices.length === 0 ? '<li style="color: var(--text-muted);">No notices for this date.</li>' : notices.map(function (n) { return '<li>' + (n.text || '').replace(/</g, '&lt;') + '</li>'; }).join('');
+      if (dayNotices) dayNotices.style.display = 'block';
+    }
+
+    function renderInsights() {
+      var total = getViewTotalClasses();
+      var atRiskCount = state.students.filter(function (s) { return isAtRiskForView(s); }).length;
+      var avgPct = '—', highest = '—', lowest = '—';
+      var avgPctNum = 0;
+      if (total > 0 && state.students.length > 0) {
+        var sum = 0, hi = 0, lo = 100;
+        state.students.forEach(function (s) {
+          var p = attendancePercentForView(s);
+          sum += p;
+          if (p > hi) hi = p;
+          if (p < lo) lo = p;
+        });
+        avgPctNum = Math.round(sum / state.students.length);
+        avgPct = avgPctNum + '%';
+        highest = hi + '%';
+        lowest = lo + '%';
+      }
+      document.getElementById('insightTotalClasses').textContent = total;
+      document.getElementById('insightAvgPct').textContent = avgPct;
+      document.getElementById('insightAtRisk').textContent = atRiskCount;
+      document.getElementById('insightHighest').textContent = highest;
+      document.getElementById('insightLowest').textContent = lowest;
+      var totalBar = document.getElementById('insightTotalBar');
+      var avgBar = document.getElementById('insightAvgBar');
+      var atRiskBar = document.getElementById('insightAtRiskBar');
+      var maxClasses = Math.max(total, 20);
+      if (totalBar) { totalBar.style.width = Math.min(100, (total / maxClasses) * 100) + '%'; totalBar.className = 'progress-bar-inner health-good'; }
+      if (avgBar) { avgBar.style.width = avgPctNum + '%'; avgBar.className = 'progress-bar-inner ' + (avgPctNum >= 75 ? 'health-good' : avgPctNum >= 50 ? 'health-mid' : 'health-low'); }
+      if (atRiskBar && state.students.length) { var riskPct = Math.round((atRiskCount / state.students.length) * 100); atRiskBar.style.width = riskPct + '%'; atRiskBar.className = 'progress-bar-inner ' + (riskPct > 20 ? 'health-low' : riskPct > 10 ? 'health-mid' : 'health-good'); }
+      var classHealthPct = document.getElementById('statClassHealthPct');
+      var classHealthBar = document.getElementById('classHealthBar');
+      if (classHealthPct) classHealthPct.textContent = total > 0 ? avgPct : '—';
+      if (classHealthBar && total > 0) {
+        classHealthBar.style.width = avgPctNum + '%';
+        classHealthBar.className = 'progress-bar-inner ' + (avgPctNum >= 75 ? 'health-good' : avgPctNum >= 50 ? 'health-mid' : 'health-low');
+      }
+    }
+
+    function renderDashboard() {
+      var total = getViewTotalClasses();
+      document.getElementById('statTotalClasses').textContent = total;
+      document.getElementById('statTotalStudents').textContent = state.students.length;
+      document.getElementById('statAtRisk').textContent = state.students.filter(function (s) { return isAtRiskForView(s); }).length;
+      renderInsights();
+      renderAlerts();
+      renderMyAttendance();
+      var sessionLine = document.getElementById('sessionInfoLine');
+      var saveBtn = document.getElementById('saveSessionBtn');
+      var tableWrap = document.getElementById('dashboardTableWrap');
+      var markingHint = document.getElementById('markingHint');
+      if (sessionStarted && currentSessionSubject && state.currentSessionDate) {
+        sessionLine.textContent = 'Current: ' + currentSessionSubject + ' · ' + state.currentSessionDate;
+        sessionLine.classList.add('active');
+        saveBtn.disabled = false;
+        tableWrap.classList.remove('marking-disabled');
+        markingHint.textContent = 'Mark students Present or Absent. Click Save Session when done.';
+      } else {
+        sessionLine.textContent = 'No active session. Select subject and click Start Class.';
+        sessionLine.classList.remove('active');
+        saveBtn.disabled = true;
+        tableWrap.classList.add('marking-disabled');
+        markingHint.textContent = 'Click Start Class to begin marking attendance. Click Save Session when done.';
+      }
+      var tbody = document.getElementById('dashboardTableBody');
+      tbody.innerHTML = state.students.map(function (s) {
+        var present = isPresentInCurrentSession(s.rollNumber);
+        return '<tr class="clickable" data-roll="' + s.rollNumber + '">' +
+          '<td>' + s.rollNumber + '</td><td>' + s.name + '</td><td>' + (present ? 'Yes' : 'No') + '</td>' +
+          '<td class="action-cell">' +
+          '<button type="button" class="btn btn-sm btn-present' + (present ? ' active' : '') + '" data-action="present" data-roll="' + s.rollNumber + '">Present</button>' +
+          '<button type="button" class="btn btn-sm btn-absent' + (!present ? ' active' : '') + '" data-action="absent" data-roll="' + s.rollNumber + '">Absent</button>' +
+          '</td></tr>';
+      }).join('');
+    }
+
+    function renderStudents() {
+      var total = getViewTotalClasses();
+      var tbody = document.getElementById('studentsTableBody');
+      tbody.innerHTML = state.students.map(function (s) {
+        var presentView = getViewPresentCount(s);
+        var pct = attendancePercentForView(s);
+        var pred = getPredictionBadge(s);
+        var pctHtml = total ? pct + '%<div class="progress-bar-outer"><div class="progress-bar-inner ' + (pct >= 75 ? 'health-good' : pct >= 50 ? 'health-mid' : 'health-low') + '" style="width: ' + Math.min(100, pct) + '%;"></div></div>' : '—';
+        return '<tr class="clickable" data-roll="' + s.rollNumber + '">' +
+          '<td>' + s.rollNumber + '</td><td>' + s.name + '</td><td>' + s.phone + '</td><td>' + presentView + '</td>' +
+          '<td class="pct-cell">' + pctHtml + '</td><td><span class="badge ' + pred.cls + '">' + pred.text + '</span></td></tr>';
+      }).join('');
+    }
+
+    function renderAtRisk() {
+      var atRisk = state.students.filter(function (s) { return isAtRiskForView(s); });
+      var tbody = document.getElementById('atRiskTableBody');
+      var empty = document.getElementById('atRiskEmpty');
+      if (atRisk.length === 0) {
+        tbody.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+      }
+      empty.style.display = 'none';
+      tbody.innerHTML = atRisk.map(function (s) {
+        var presentView = getViewPresentCount(s);
+        var pct = attendancePercentForView(s);
+        var pred = getPredictionBadge(s);
+        var pctHtml = pct + '%<div class="progress-bar-outer"><div class="progress-bar-inner health-low" style="width: ' + Math.min(100, pct) + '%;"></div></div>';
+        return '<tr class="clickable" data-roll="' + s.rollNumber + '">' +
+          '<td>' + s.rollNumber + '</td><td>' + s.name + '</td><td>' + s.phone + '</td><td>' + presentView + '</td><td class="pct-cell">' + pctHtml + '</td><td><span class="badge ' + pred.cls + '">' + pred.text + '</span></td></tr>';
+      }).join('');
+    }
+
+    function exportCsv() {
+      var total = getViewTotalClasses();
+      var header = 'Roll Number,Name,Total Classes,Present Count,Attendance %,Risk Status';
+      var rows = state.students.map(function (s) {
+        var present = getViewPresentCount(s);
+        var pct = total ? Math.round((present / total) * 100) : 0;
+        var risk = total > 0 && pct < 75 ? 'At Risk' : 'OK';
+        return [s.rollNumber, '"' + s.name.replace(/"/g, '""') + '"', total, present, pct + '%', risk].join(',');
+      });
+      var csv = header + '\n' + rows.join('\n');
+      var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'attendance_' + (viewMode === 'month' ? 'month_' : '') + new Date().toISOString().slice(0, 10) + '.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function setViewMode(mode) {
+      viewMode = mode;
+      document.querySelectorAll('.toggle-group .btn-toggle').forEach(function (btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-mode') === mode);
+      });
+      renderAll();
+    }
+
+    function renderAll() {
+      renderDashboard();
+      renderStudents();
+      renderAtRisk();
+    }
+
+    function showPage(pageId) {
+      document.querySelectorAll('.page').forEach(function (p) { p.classList.remove('active'); });
+      document.querySelectorAll('.nav-item').forEach(function (n) { n.classList.remove('active'); });
+      var page = document.getElementById('page-' + pageId);
+      var navItem = document.querySelector('.nav-item[data-page="' + pageId + '"]');
+      if (page) page.classList.add('active');
+      if (navItem) navItem.classList.add('active');
+      if (pageId === 'notices') renderNoticesAndCalendar();
+    }
+
+    function populateStudentRollSelect() {
+      var sel = document.getElementById('studentRollSelect');
+      if (!sel) return;
+      sel.innerHTML = state.students.map(function (s) { return '<option value="' + s.rollNumber + '"' + (s.rollNumber === studentRollForView ? ' selected' : '') + '>Student ' + s.rollNumber + '</option>'; }).join('');
+    }
+
+    function addNotice() {
+      var textEl = document.getElementById('noticeText');
+      var dateEl = document.getElementById('noticeDate');
+      var text = textEl && textEl.value ? textEl.value.trim() : '';
+      if (!text) return;
+      var notices = getNotices();
+      var notice = { id: Date.now().toString(), text: text, date: (dateEl && dateEl.value) || null, createdAt: new Date().toISOString() };
+      notices.push(notice);
+      saveNotices(notices);
+      if (textEl) textEl.value = '';
+      if (dateEl) dateEl.value = '';
+      renderNoticesAndCalendar();
+    }
+
+    function deleteNotice(id) {
+      var notices = getNotices().filter(function (n) { return n.id !== id; });
+      saveNotices(notices);
+      renderNoticesAndCalendar();
+    }
+
+    document.getElementById('sidebarToggle').addEventListener('click', function () {
+      document.getElementById('sidebar').classList.toggle('collapsed');
+    });
+    document.getElementById('mobileMenuBtn').addEventListener('click', function () {
+      document.getElementById('sidebar').classList.toggle('open');
+    });
+    document.getElementById('roleSelect').addEventListener('change', function () {
+      currentRole = this.value;
+      applyRoleVisibility();
+      populateStudentRollSelect();
+      renderAll();
+    });
+    document.getElementById('studentRollSelect').addEventListener('change', function () {
+      studentRollForView = parseInt(this.value, 10) || 1;
+      localStorage.setItem('smartAttendanceStudentRoll', String(studentRollForView));
+      renderAll();
+    });
+    document.querySelectorAll('.nav-item').forEach(function (el) {
+      el.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (el.classList.contains('role-hidden')) return;
+        showPage(this.getAttribute('data-page'));
+        document.getElementById('sidebar').classList.remove('open');
+      });
+    });
+    document.getElementById('startClassBtn').addEventListener('click', startClass);
+    document.getElementById('saveSessionBtn').addEventListener('click', saveSession);
+    document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
+    document.getElementById('addNoticeBtn').addEventListener('click', addNotice);
+    document.getElementById('calendarPrev').addEventListener('click', function () {
+      if (calendarMonth === 0) { calendarMonth = 11; calendarYear--; } else calendarMonth--;
+      renderCalendar();
+    });
+    document.getElementById('calendarNext').addEventListener('click', function () {
+      if (calendarMonth === 11) { calendarMonth = 0; calendarYear++; } else calendarMonth++;
+      renderCalendar();
+    });
+    document.getElementById('calendarGrid').addEventListener('click', function (e) {
+      var day = e.target.closest('.calendar-day');
+      if (day && day.dataset.date) showDayNotices(day.dataset.date);
+    });
+    document.getElementById('noticeList').addEventListener('click', function (e) {
+      var btn = e.target.closest('.notice-delete');
+      if (btn && btn.dataset.noticeId) { e.preventDefault(); deleteNotice(btn.dataset.noticeId); }
+    });
+    document.querySelectorAll('#viewModeToggle .btn-toggle, #viewModeToggleStudents .btn-toggle, #viewModeToggleAtRisk .btn-toggle').forEach(function (btn) {
+      btn.addEventListener('click', function () { setViewMode(this.getAttribute('data-mode')); });
+    });
+    document.getElementById('modalBack').addEventListener('click', closeStudentModal);
+    document.getElementById('studentModal').addEventListener('click', function (e) {
+      if (e.target === this) closeStudentModal();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeStudentModal();
+    });
+    document.addEventListener('click', function (e) {
+      var roll = e.target.closest('[data-roll]');
+      if (!roll) return;
+      var rollNum = parseInt(roll.getAttribute('data-roll'), 10);
+      if (e.target.getAttribute('data-action') === 'present') {
+        e.preventDefault();
+        e.stopPropagation();
+        markPresent(rollNum);
+        return;
+      }
+      if (e.target.getAttribute('data-action') === 'absent') {
+        e.preventDefault();
+        e.stopPropagation();
+        markAbsent(rollNum);
+        return;
+      }
+      if (roll.classList.contains('clickable')) openStudentModal(rollNum);
+    });
+    document.getElementById('roleSelect').value = currentRole;
+    populateStudentRollSelect();
+    applyRoleVisibility();
+    renderAll();
+  </script>
+</body>
+</html>
